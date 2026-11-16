@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Min ekonomi</title>
+<style>
+  :root { --bg:#0d0f12; --card:#1a1d23; --text:#e8ebf0; --muted:#8b95a3; --green:#2fc77f; --red:#f06060; --blue:#4a85ff; --line:#2a2f38; --input:#12151a; color-scheme:dark; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:8px 0 16px; }
+  h2 { font-size:1rem; margin:0 0 10px; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:none; border:1px solid var(--line); }
+  .month { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .month button { width:40px; }
+  .month strong { text-transform:capitalize; font-size:1.1rem; }
+  .big { text-align:center; }
+  .big .num { font-size:2.4rem; font-weight:700; }
+  .big .lbl { color:var(--muted); font-size:.9rem; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .two .num { font-size:1.8rem; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .bar { height:12px; background:var(--line); border-radius:99px; overflow:hidden; margin:12px 0 6px; }
+  .bar > div { height:100%; background:var(--green); transition:width .3s; }
+  .bar.warn > div { background:#e8a317; } .bar.over > div { background:var(--red); }
+  .row { display:flex; justify-content:space-between; gap:8px; padding:6px 0; }
+  .row + .row { border-top:1px solid var(--line); }
+  .muted { color:var(--muted); font-size:.85rem; }
+  form.grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  form.grid .full { grid-column:1 / -1; }
+  label { font-size:.8rem; color:var(--muted); display:block; margin-bottom:3px; }
+  input, select, button { font:inherit; padding:10px; border:1px solid var(--line); border-radius:10px; width:100%; background:var(--input); color:var(--text); }
+  button { cursor:pointer; background:var(--blue); color:#fff; border:none; font-weight:600; }
+  button.ghost { background:#262b34; color:var(--text); font-weight:500; }
+  button.x { width:auto; padding:4px 10px; background:transparent; color:var(--muted); font-size:1.1rem; }
+  .tx { display:flex; align-items:center; gap:10px; padding:8px 0; }
+  .tx + .tx { border-top:1px solid var(--line); }
+  .tx .info { flex:1; min-width:0; }
+  .tx .info div:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .amt { font-weight:600; white-space:nowrap; }
+  .cat { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:.92rem; }
+  .cat .b { flex:1; height:8px; background:var(--line); border-radius:99px; overflow:hidden; }
+  .cat .b > div { height:100%; background:var(--blue); }
+  .tools { display:flex; gap:8px; }
+  .empty { color:var(--muted); text-align:center; padding:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>💰 Min ekonomi</h1>
+
+  <div class="month">
+    <button class="ghost" id="prev">‹</button>
+    <strong id="monthName"></strong>
+    <button class="ghost" id="next">›</button>
+  </div>
+
+  <div class="card big">
+    <div class="lbl" id="bigLabel">Kvar per dag</div>
+    <div class="num" id="perDay">–</div>
+    <div class="bar" id="bar"><div id="barFill" style="width:0"></div></div>
+    <div class="muted" id="barText"></div>
+  </div>
+
+  <div class="card">
+    <h2>Idag</h2>
+    <div class="two">
+      <div class="big"><div class="lbl">Dagsbudget</div><div class="num" id="dayBudget">–</div></div>
+      <div class="big"><div class="lbl">Kvar att spendera idag</div><div class="num" id="dayLeft">–</div></div>
+    </div>
+    <div class="muted" id="dayNote" style="text-align:center;margin-top:6px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Översikt</h2>
+    <div class="row"><span>Inkomst</span><span id="sIncome"></span></div>
+    <div class="row"><span>Fasta kostnader</span><span id="sFixed"></span></div>
+    <div class="row"><span>Sparande</span><span id="sSave"></span></div>
+    <div class="row"><strong>Att leva på</strong><strong id="sAvail"></strong></div>
+    <div class="row"><span>Utgifter hittills</span><span id="sSpent"></span></div>
+    <div class="row"><strong>Kvar</strong><strong id="sLeft"></strong></div>
+  </div>
+
+  <div class="card">
+    <h2>Lägg till utgift</h2>
+    <form class="grid" id="txForm">
+      <div><label>Belopp (kr)</label><input type="number" id="txAmount" min="0" step="any" inputmode="decimal" required></div>
+      <div><label>Kategori</label>
+        <select id="txCat">
+          <option>Mat</option><option>Snabbmat/godis</option><option>Transport</option>
+          <option>Nöje</option><option>Kläder</option><option>Spel/prenumerationer</option><option>Övrigt</option>
+        </select>
+      </div>
+      <div><label>Datum</label><input type="date" id="txDate" required></div>
+      <div><label>Notering (valfritt)</label><input type="text" id="txNote" maxlength="60"></div>
+      <div class="full"><button type="submit">Spara utgift</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Utgifter denna månad</h2>
+    <div id="txList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Vart går pengarna?</h2>
+    <div id="catList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Pengar jag fått denna månad</h2>
+    <form class="grid" id="incForm">
+      <div><label>Belopp (kr)</label><input type="number" id="incAmount" min="0" step="any" inputmode="decimal" required></div>
+      <div><label>Datum</label><input type="date" id="incDate" required></div>
+      <div class="full"><label>Från vad (valfritt)</label><input type="text" id="incNote" maxlength="60" placeholder="t.ex. lön, bidrag, present"></div>
+      <div class="full"><button type="submit">Lägg till inkomst</button></div>
+    </form>
+    <div id="incList" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Mina siffror per månad</h2>
+    <form class="grid" id="setForm">
+      <div><label>Fasta kostnader (kr)</label><input type="number" id="setFixed" min="0" step="any" inputmode="decimal"></div>
+      <div><label>Sparmål per månad (kr)</label><input type="number" id="setSave" min="0" step="any" inputmode="decimal"></div>
+      <div class="full"><button type="submit">Spara siffror</button></div>
+    </form>
+    <p class="muted">Fasta kostnader = hyra, telefon, försäkringar, abonnemang, allt som dras varje månad.</p>
+  </div>
+
+  <div class="card">
+    <h2>Säkerhetskopia</h2>
+    <div class="tools">
+      <button class="ghost" id="exportBtn">Ladda ner</button>
+      <button class="ghost" id="importBtn">Läs in</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+    <p class="muted">Datan sparas i din webbläsare på den här datorn. Ladda ner en kopia då och då.</p>
+  </div>
+</main>
+
+<script>
+const KEY = 'ekonomi-v1';
+const $ = id => document.getElementById(id);
+const kr = n => Math.round(n).toLocaleString('sv-SE') + ' kr';
+
+let data = { settings: { income: 0, fixed: 0, save: 0 }, tx: [] };
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) data = JSON.parse(raw);
+} catch (e) {}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+
+const today = new Date();
+let view = new Date(today.getFullYear(), today.getMonth(), 1);
+
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+$('txDate').value = iso(today);
+$('incDate').value = iso(today);
+
+if (!Array.isArray(data.income)) {
+  data.income = [];
+  if (data.settings && data.settings.income > 0) {
+    data.income.push({ id: Date.now(), date: iso(today), amount: data.settings.income, note: 'Tidigare inlagd inkomst' });
+  }
+  data.settings.income = 0;
+  persist();
+}
+
+function render() {
+  const y = view.getFullYear(), m = view.getMonth();
+  $('monthName').textContent = view.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+
+  const prefix = `${y}-${pad(m+1)}`;
+  const list = data.tx.filter(t => t.date.startsWith(prefix)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const spent = list.reduce((s, t) => s + t.amount, 0);
+  const incs = data.income.filter(t => t.date.startsWith(prefix)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const incomeSum = incs.reduce((sum, t) => sum + t.amount, 0);
+  const s = data.settings;
+  const avail = incomeSum - s.fixed - s.save;
+
+  $('incList').innerHTML = incs.length ? '' : '<div class="empty">Ingen inkomst inlagd för den här månaden</div>';
+  incs.forEach(t => {
+    const el = document.createElement('div'); el.className = 'tx';
+    const info = document.createElement('div'); info.className = 'info';
+    const a = document.createElement('div'); a.textContent = t.note || 'Inkomst';
+    const b = document.createElement('div'); b.className = 'muted'; b.textContent = t.date;
+    info.append(a, b);
+    const amt = document.createElement('div'); amt.className = 'amt ok'; amt.textContent = '+' + kr(t.amount);
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Ta bort';
+    x.onclick = () => { data.income = data.income.filter(q => q.id !== t.id); persist(); render(); };
+    el.append(info, amt, x);
+    $('incList').append(el);
+  });
+  const left = avail - spent;
+
+  $('sIncome').textContent = kr(incomeSum);
+  $('sFixed').textContent = kr(s.fixed);
+  $('sSave').textContent = kr(s.save);
+  $('sAvail').textContent = kr(avail);
+  $('sSpent').textContent = kr(spent);
+  $('sLeft').textContent = kr(left);
+  $('sLeft').className = left < 0 ? 'bad' : 'ok';
+
+  const dim = new Date(y, m + 1, 0).getDate();
+  const isCurrent = y === today.getFullYear() && m === today.getMonth();
+  const isPast = view < new Date(today.getFullYear(), today.getMonth(), 1);
+
+  if (isCurrent) {
+    const daysLeft = dim - today.getDate() + 1;
+    const per = left / daysLeft;
+    $('bigLabel').textContent = `Kvar per dag (${daysLeft} dagar kvar i månaden)`;
+    $('perDay').textContent = kr(per);
+    $('perDay').className = 'num ' + (per < 0 ? 'bad' : 'ok');
+  } else {
+    $('bigLabel').textContent = isPast ? 'Över/under budget' : 'Planerat att leva på';
+    $('perDay').textContent = isPast ? kr(left) : kr(avail);
+    $('perDay').className = 'num ' + (isPast && left < 0 ? 'bad' : 'ok');
+  }
+
+  if (isCurrent) {
+    const daysLeft2 = dim - today.getDate() + 1;
+    const spentToday = list.filter(t => t.date === iso(today)).reduce((s, t) => s + t.amount, 0);
+    const budget = (left + spentToday) / daysLeft2;
+    const leftToday = budget - spentToday;
+    $('dayBudget').textContent = kr(budget);
+    $('dayBudget').className = 'num ' + (budget < 0 ? 'bad' : '');
+    $('dayLeft').textContent = kr(leftToday);
+    $('dayLeft').className = 'num ' + (leftToday < 0 ? 'bad' : 'ok');
+    $('dayNote').textContent = leftToday < 0
+      ? 'Du har gått över dagens budget. Det du överskrider tas från kommande dagar.'
+      : `Du har spenderat ${kr(spentToday)} idag. Sparar du något idag blir det mer imorgon.`;
+  } else {
+    $('dayBudget').textContent = '–'; $('dayBudget').className = 'num';
+    $('dayLeft').textContent = '–'; $('dayLeft').className = 'num';
+    $('dayNote').textContent = 'Dagsbudgeten visas för den pågående månaden.';
+  }
+
+  const pct = avail > 0 ? Math.min(100, (spent / avail) * 100) : (spent > 0 ? 100 : 0);
+  $('barFill').style.width = pct + '%';
+  $('bar').className = 'bar ' + (spent > avail && spent > 0 ? 'over' : pct > 80 ? 'warn' : '');
+  $('barText').textContent = avail > 0 ? `${Math.round(pct)}% av månadens pengar är använda` : 'Fyll i dina siffror längst ner för att komma igång';
+
+  // utgiftslista
+  $('txList').innerHTML = list.length ? '' : '<div class="empty">Inga utgifter ännu 🙂</div>';
+  list.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'tx';
+    const info = document.createElement('div'); info.className = 'info';
+    const a = document.createElement('div'); a.textContent = t.note || t.cat;
+    const b = document.createElement('div'); b.className = 'muted'; b.textContent = `${t.date} · ${t.cat}`;
+    info.append(a, b);
+    const amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = '−' + kr(t.amount);
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Ta bort';
+    x.onclick = () => { data.tx = data.tx.filter(q => q.id !== t.id); persist(); render(); };
+    el.append(info, amt, x);
+    $('txList').append(el);
+  });
+
+  // kategorier
+  const byCat = {};
+  list.forEach(t => byCat[t.cat] = (byCat[t.cat] || 0) + t.amount);
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  $('catList').innerHTML = cats.length ? '' : '<div class="empty">Inget att visa än</div>';
+  cats.forEach(([name, sum]) => {
+    const el = document.createElement('div'); el.className = 'cat';
+    const n = document.createElement('span'); n.style.width = '130px'; n.textContent = name;
+    const bar = document.createElement('div'); bar.className = 'b';
+    const fill = document.createElement('div'); fill.style.width = (sum / cats[0][1] * 100) + '%';
+    bar.append(fill);
+    const v = document.createElement('span'); v.textContent = kr(sum);
+    el.append(n, bar, v);
+    $('catList').append(el);
+  });
+}
+
+$('prev').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); render(); };
+$('next').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); render(); };
+
+$('txForm').onsubmit = e => {
+  e.preventDefault();
+  const amount = parseFloat($('txAmount').value);
+  if (!(amount > 0)) return;
+  data.tx.push({ id: Date.now(), date: $('txDate').value, amount, cat: $('txCat').value, note: $('txNote').value.trim() });
+  persist();
+  $('txAmount').value = ''; $('txNote').value = '';
+  const d = new Date($('txDate').value);
+  view = new Date(d.getFullYear(), d.getMonth(), 1);
+  render();
+  $('txAmount').focus();
+};
+
+$('setFixed').value = data.settings.fixed || '';
+$('setSave').value = data.settings.save || '';
+$('incForm').onsubmit = e => {
+  e.preventDefault();
+  const amount = parseFloat($('incAmount').value);
+  if (!(amount > 0)) return;
+  data.income.push({ id: Date.now(), date: $('incDate').value, amount, note: $('incNote').value.trim() });
+  persist();
+  $('incAmount').value = ''; $('incNote').value = '';
+  const d = new Date($('incDate').value);
+  view = new Date(d.getFullYear(), d.getMonth(), 1);
+  render();
+  $('incAmount').focus();
+};
+$('setForm').onsubmit = e => {
+  e.preventDefault();
+  data.settings = {
+    income: 0,
+    fixed: parseFloat($('setFixed').value) || 0,
+    save: parseFloat($('setSave').value) || 0
+  };
+  persist(); render();
+};
+
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ekonomi-${iso(today)}.json`;
+  a.click();
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (d && d.settings && Array.isArray(d.tx)) {
+        data = d; if (!Array.isArray(data.income)) data.income = []; persist();
+        $('setFixed').value = data.settings.fixed || '';
+        $('setSave').value = data.settings.save || '';
+        render();
+      } else alert('Filen ser inte ut som en ekonomi-kopia.');
+    } catch (err) { alert('Kunde inte läsa filen.'); }
+  };
+  r.readAsText(f);
+};
+
+render();
+</script>
+</body>
+</html>
